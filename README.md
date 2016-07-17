@@ -34,7 +34,7 @@ This is what I've learned about FFmpeg 3.1.1 (and SDL2 2.0.4, too). It's not exa
 
 ### Build
 
-I only known how to run ./configure, make, make check, make install and I don't want to complicate my pour knowledge with Make/CMake, I use only command line gcc for compile.
+I only known how to run ./configure, make, make check, make install and I don't want to complicate my pour knowledge with Make/CMake, I use command line gcc for compiling.
 
 
 * Compile

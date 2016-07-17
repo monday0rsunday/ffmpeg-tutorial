@@ -1,0 +1,7 @@
+ffmpeg-tutorial/
+.fuse*
+*
+!00*.c
+!*.md
+!sdl*.c
+!.gitignore
