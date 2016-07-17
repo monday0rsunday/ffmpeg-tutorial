@@ -18,7 +18,7 @@ This is what I've learned about FFmpeg 3.1.1 (and SDL2 2.0.4, too). It's not exa
 
 * SDL
 
- * [Suggested solution](http://www.gamedev.net/topic/646010-sdl2-mixer-no-such-audio-device-solved/) for no such audio device problem: `sudo apt-get install libasound2-dev libpulse-dev`
+ * [Suggested solution](http://forums.libsdl.org/viewtopic.php?p=30415#30415) for no such audio device problem: `sudo apt-get install libasound2-dev libpulse-dev`
 
  * `file=SDL2-2.0.4 && wget https://www.libsdl.org/release/${file}.tar.gz && tar -zxvf ${file}.tar.gz && cd ${file}`
 
