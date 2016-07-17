@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 #define SDL_AUDIO_BUFFER_SIZE 1024
-#define MAX_AUDIO_FRAME_SIZE 192000
+#define MAX_AUDIO_FRAME_SIZE 44100
 
 
 typedef struct PacketQueue {
@@ -139,8 +139,13 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 
 			//TODO new API
 			// got_frame = avcodec_receive_frame(acodec_ctx, &frame);
+			// len1 = frame.pkt_size;
+			// end new  API
 
 			len1 = avcodec_decode_audio4(acodec_ctx, &frame, &got_frame, &pkt);
+			int len2 = frame.pkt_size;
+			printf("len1 %d len2 %d\n", len1, len2);
+
 			if(len1 < 0) {
 				/* if error, skip frame */
 				audio_pkt_size = 0;
@@ -149,6 +154,7 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 
 			audio_pkt_data += len1;
 			audio_pkt_size -= len1;
+
 			data_size = 0;
 			if(got_frame) {
 				// get size of data in frame
@@ -173,8 +179,11 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 		if(packet_queue_get(&a_queue, &pkt, 1) < 0) {// no more packet
 			return -1;
 		}
+		
 		//TODO new API
 		// avcodec_send_packet(acodec_ctx, &pkt);
+		// end new API
+
 		audio_pkt_data = pkt.data;
 		audio_pkt_size = pkt.size;
 	}
@@ -286,6 +295,7 @@ int main(int argc, char* argv[]) {
 		ret  = av_read_frame(fmt_ctx, &packet);
 		if(ret < 0) {
 			break;
+			// continue;
 		}
 		if(packet.stream_index == v_stream_idx) {
 			av_packet_unref(&packet);
