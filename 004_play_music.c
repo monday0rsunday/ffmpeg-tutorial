@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 #define SDL_AUDIO_BUFFER_SIZE 1024
-#define MAX_AUDIO_FRAME_SIZE 44100
+#define MAX_AUDIO_FRAME_SIZE 192000
 
 
 typedef struct PacketQueue {
@@ -197,11 +197,11 @@ int main(int argc, char* argv[]) {
 	}
 	char* vf_path = argv[1];
 	AVFormatContext* fmt_ctx = NULL;
-	AVCodecContext* vcodec_ctx;
-	AVCodec* vcodec;
-	AVCodecContext* acodec_ctx;
-	AVCodec* acodec;
-	AVFrame* frame;
+	AVCodecContext* vcodec_ctx = NULL;
+	AVCodec* vcodec = NULL;
+	AVCodecContext* acodec_ctx = NULL;
+	AVCodec* acodec = NULL;
+	AVFrame* frame = NULL;
 	AVPacket packet;
 
 	int ret = -1, i, v_stream_idx = -1, a_stream_idx = -1;
@@ -219,9 +219,9 @@ int main(int argc, char* argv[]) {
 	av_dump_format(fmt_ctx, 0, vf_path, 0);
 
 	for(i = 0; i < fmt_ctx->nb_streams; i++) {
-		if(fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+		if(fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO & v_stream_idx < 0) {
 			v_stream_idx = i;
-		} else if(fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+		} else if(fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && a_stream_idx <0) {
 			a_stream_idx = i;
 		}
 	}
@@ -240,6 +240,8 @@ int main(int argc, char* argv[]) {
 	avcodec_parameters_to_context(vcodec_ctx, fmt_ctx->streams[v_stream_idx]->codecpar);
 	acodec_ctx = avcodec_alloc_context3(NULL);
 	avcodec_parameters_to_context(acodec_ctx, fmt_ctx->streams[a_stream_idx]->codecpar);
+	// acodec_ctx = fmt_ctx->streams[a_stream_idx]->codec;
+
 	vcodec = avcodec_find_decoder(vcodec_ctx->codec_id);
 	acodec = avcodec_find_decoder(acodec_ctx->codec_id);
 	if(vcodec == NULL) {
@@ -263,6 +265,7 @@ int main(int argc, char* argv[]) {
 	    goto end;
 	}
 
+
 	SDL_Event event;
 	// setup SDL audio
 	SDL_AudioSpec wanted_spec, spec;
@@ -280,10 +283,16 @@ int main(int argc, char* argv[]) {
 		printf("SDL_OpenAudio err:%s\n", SDL_GetError());
 		goto enda;
 	}
+
+
+
 	packet_queue_init(&a_queue);
 	SDL_PauseAudio(0);
 
-	while(1) {
+	frame = av_frame_alloc();
+
+	int ret1, ret2;
+	while(quit!=1) {
 		SDL_PollEvent(&event);
 		switch(event.type) {
 			case SDL_QUIT:
@@ -298,6 +307,13 @@ int main(int argc, char* argv[]) {
 			// continue;
 		}
 		if(packet.stream_index == v_stream_idx) {
+			// there's problem if I can not decode video frame: audio only play short time then exist. you can comment following 5 lines to see problem
+			ret1 = avcodec_send_packet(vcodec_ctx, &packet);
+			ret2 = avcodec_receive_frame(vcodec_ctx, frame);
+			if(ret2 < 0 ){
+				continue;
+	    	}
+	    	// for above comment, do not comment this!
 			av_packet_unref(&packet);
 		}else if(packet.stream_index == a_stream_idx) {
 			packet_queue_put(&a_queue, &packet);
@@ -307,6 +323,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	SDL_Quit();
+	av_frame_free(&frame);
 	enda:
 	avcodec_close(vcodec_ctx);
 	avcodec_free_context(&vcodec_ctx);
