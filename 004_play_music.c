@@ -139,7 +139,7 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 
 			//TODO new API
 			// got_frame = avcodec_receive_frame(acodec_ctx, &frame);
-			// len1 = frame.pkt_size;
+			// len1 = frame.linesize[0];
 			// end new  API
 
 			len1 = avcodec_decode_audio4(acodec_ctx, &frame, &got_frame, &pkt);
@@ -159,8 +159,20 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 			if(got_frame) {
 				// get size of data in frame
 				data_size = av_samples_get_buffer_size(NULL, acodec_ctx->channels,
-					frame.nb_samples, acodec_ctx->sample_fmt, 1);
-				// copy data to audio_buf
+					frame.nb_samples, acodec_ctx->sample_fmt, 0);
+				// printf("%d data size %d %d", acodec_ctx->sample_fmt, data_size, (frame.linesize[0]*frame.channels));
+				// uint8_t *buff = av_malloc(data_size);
+				// int j,k = 0;
+				// for(j = 0; j<data_size/4; j++){
+				// 	for(k=0;k<frame.channels;k++){
+				// 		buff[j*4*frame.channels+4*k] = frame.data[k][j];
+				// 		buff[j*4*frame.channels+1+4*k] = frame.data[k][j+1];
+				// 		buff[j*4*frame.channels+2+4*k] = frame.data[k][j+2];
+				// 		buff[j*4*frame.channels+3+4*k] = frame.data[k][j+3];
+				// 	}
+				// } 
+				// memcpy(audio_buf, buff, data_size);
+				// av_free(buff);
 				memcpy(audio_buf, frame.data[0], data_size);
 			}
 			if(data_size <= 0) {
@@ -240,6 +252,8 @@ int main(int argc, char* argv[]) {
 	avcodec_parameters_to_context(vcodec_ctx, fmt_ctx->streams[v_stream_idx]->codecpar);
 	acodec_ctx = avcodec_alloc_context3(NULL);
 	avcodec_parameters_to_context(acodec_ctx, fmt_ctx->streams[a_stream_idx]->codecpar);
+	acodec_ctx->sample_fmt = AV_SAMPLE_FMT_S16P;
+	acodec_ctx->request_sample_fmt = AV_SAMPLE_FMT_S16P;
 	// acodec_ctx = fmt_ctx->streams[a_stream_idx]->codec;
 
 	vcodec = avcodec_find_decoder(vcodec_ctx->codec_id);
@@ -269,10 +283,51 @@ int main(int argc, char* argv[]) {
 	SDL_Event event;
 	// setup SDL audio
 	SDL_AudioSpec wanted_spec, spec;
+	switch(acodec_ctx->sample_fmt){
+		case AV_SAMPLE_FMT_NONE:
+			printf("AV_SAMPLE_FMT_NONE format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_U8:
+			printf("AV_SAMPLE_FMT_U8 format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_S16:
+			printf("AV_SAMPLE_FMT_S16 format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_S32:
+			printf("AV_SAMPLE_FMT_S32 format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_FLT:
+			printf("AV_SAMPLE_FMT_FLT format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_DBL:
+			printf("AV_SAMPLE_FMT_DBL format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_U8P:
+			printf("AV_SAMPLE_FMT_U8P format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_S16P:
+			printf("AV_SAMPLE_FMT_S16P format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_S32P:
+			printf("AV_SAMPLE_FMT_S32P format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_FLTP:
+			printf("AV_SAMPLE_FMT_FLTP format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_DBLP:
+			printf("AV_SAMPLE_FMT_DBLP format %d\n", acodec_ctx->sample_fmt);
+			break;
+		case AV_SAMPLE_FMT_NB:
+			printf("AV_SAMPLE_FMT_NB format %d\n", acodec_ctx->sample_fmt);
+			break;
+		default:
+			printf("Default audio format %d\n", acodec_ctx->sample_fmt);
+			break;	
+	}
 
 	SDL_memset(&wanted_spec, 0, sizeof(wanted_spec));
 	wanted_spec.freq = acodec_ctx->sample_rate;
-	wanted_spec.format = AUDIO_S16SYS;
+	wanted_spec.format = AUDIO_F32SYS;
 	wanted_spec.channels = acodec_ctx->channels;
 	wanted_spec.silence = 0;
 	wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
