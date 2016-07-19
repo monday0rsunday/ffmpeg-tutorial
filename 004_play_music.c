@@ -22,6 +22,7 @@ typedef struct PacketQueue {
 int quit = 0;
 PacketQueue a_queue;// must be declare after typedef=.=
 SwrContext *swr;
+int put_all = 0;
 
 void packet_queue_init(PacketQueue *q) {
 	memset(q, 0, sizeof(PacketQueue));
@@ -89,7 +90,15 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block) {
 			ret = 0;
 			break;
 		} else {
-			SDL_CondWait(q->cond, q->mutex);
+			// wait only when there still has data
+			// TODO there may be problem with this solution due to updating
+			//  put_all without ensuring in multithread program
+			if(put_all!=1)
+				SDL_CondWait(q->cond, q->mutex);
+			else {
+				ret = -2;
+				break;
+			}
 		}
 	}
 
@@ -197,6 +206,7 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 		}
 		// get next packet
 		if(packet_queue_get(&a_queue, &pkt, 1) < 0) {// no more packet
+			printf("Play audio completed, try shutdown\n");
 			quit = 1; // stop program
 			return -1;
 		}
@@ -327,6 +337,7 @@ int main(int argc, char* argv[]) {
 		SDL_PollEvent(&event);
 		switch(event.type) {
 			case SDL_QUIT:
+				printf("SDL receive stop, try shutdown\n");
 				quit = 1;
 				break;
 			default:
@@ -336,6 +347,10 @@ int main(int argc, char* argv[]) {
 		if(ret < 0) {
 			// when error/finished, just sleep main thread 1 second then continue
 			// or you can use nanosleep(man 2 nanosleep)
+			if(put_all!=1){
+				printf("Complete read frames\n");
+				put_all = 1;
+			}
 			sleep(1);
 			continue;
 		}
