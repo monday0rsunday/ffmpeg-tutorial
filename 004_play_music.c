@@ -7,7 +7,7 @@
 
 #define SDL_AUDIO_BUFFER_SIZE 1024
 #define MAX_AUDIO_FRAME_SIZE 192000
-#define OUT_SAMPLE_RATE 44100
+#define OUT_SAMPLE_RATE 44100 //44100
 #define OUT_SAMPLE_FMT AV_SAMPLE_FMT_FLT
 
 
@@ -168,7 +168,7 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 				// printf("%d data size %d %d\n", data_size, (frame.linesize[0]*frame.channels));
 				reframe = av_frame_alloc();
 				reframe->channel_layout = frame.channel_layout;
-				reframe->sample_rate = OUT_SAMPLE_RATE;
+				reframe->sample_rate = frame.sample_rate;
 				reframe->format = OUT_SAMPLE_FMT;
 				int rr = swr_convert_frame(swr, reframe, &frame);
 				// if(rr < 0 ){
@@ -283,7 +283,7 @@ int main(int argc, char* argv[]) {
 	swr = swr_alloc_set_opts(NULL,  // we're allocating a new context
                       acodec_ctx->channel_layout,  // out_ch_layout
                       OUT_SAMPLE_FMT,    // out_sample_fmt
-                      OUT_SAMPLE_RATE,                // out_sample_rate
+                      acodec_ctx->sample_rate,                // out_sample_rate
                       acodec_ctx->channel_layout, // in_ch_layout: stereo, blabla
                       acodec_ctx->sample_fmt,   // in_sample_fmt
                       acodec_ctx->sample_rate,                // in_sample_rate
