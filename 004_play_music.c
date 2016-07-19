@@ -1,11 +1,14 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 #include <SDL2/SDL.h>
 #include <stdio.h>
 
 #define SDL_AUDIO_BUFFER_SIZE 1024
 #define MAX_AUDIO_FRAME_SIZE 192000
+#define OUT_SAMPLE_RATE 44100
+#define OUT_SAMPLE_FMT AV_SAMPLE_FMT_FLT
 
 
 typedef struct PacketQueue {
@@ -24,6 +27,8 @@ void packet_queue_init(PacketQueue *q) {
 	q->mutex = SDL_CreateMutex();
 	q->cond = SDL_CreateCond();
 }
+
+SwrContext *swr;
 
 /**
 * @return 0 on success, negative on error
@@ -130,7 +135,7 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 	static AVPacket pkt;
 	static uint8_t *audio_pkt_data = NULL;
 	static int audio_pkt_size = 0;
-	static AVFrame frame;
+	static AVFrame frame, *reframe;
 	int len1, data_size = 0;
 	for(;;) {
 		// 1 packet can contains multiple frames
@@ -158,22 +163,23 @@ int audio_decode_frame(AVCodecContext * acodec_ctx, uint8_t *audio_buf, int buf_
 			data_size = 0;
 			if(got_frame) {
 				// get size of data in frame
-				data_size = av_samples_get_buffer_size(NULL, acodec_ctx->channels,
-					frame.nb_samples, acodec_ctx->sample_fmt, 0);
-				// printf("%d data size %d %d", acodec_ctx->sample_fmt, data_size, (frame.linesize[0]*frame.channels));
-				// uint8_t *buff = av_malloc(data_size);
-				// int j,k = 0;
-				// for(j = 0; j<data_size/4; j++){
-				// 	for(k=0;k<frame.channels;k++){
-				// 		buff[j*4*frame.channels+4*k] = frame.data[k][j];
-				// 		buff[j*4*frame.channels+1+4*k] = frame.data[k][j+1];
-				// 		buff[j*4*frame.channels+2+4*k] = frame.data[k][j+2];
-				// 		buff[j*4*frame.channels+3+4*k] = frame.data[k][j+3];
-				// 	}
-				// } 
-				// memcpy(audio_buf, buff, data_size);
-				// av_free(buff);
-				memcpy(audio_buf, frame.data[0], data_size);
+				// data_size = av_samples_get_buffer_size(NULL, acodec_ctx->channels,
+				// 	frame.nb_samples, acodec_ctx->sample_fmt, 0);
+				// printf("%d data size %d %d\n", data_size, (frame.linesize[0]*frame.channels));
+				reframe = av_frame_alloc();
+				reframe->channel_layout = frame.channel_layout;
+				reframe->sample_rate = OUT_SAMPLE_RATE;
+				reframe->format = OUT_SAMPLE_FMT;
+				int rr = swr_convert_frame(swr, reframe, &frame);
+				// if(rr < 0 ){
+				// 	break;
+				// }
+				data_size = av_samples_get_buffer_size(NULL, reframe->channels,
+					reframe->nb_samples, reframe->format, 0);
+				printf("blabla %s %d %d\n", av_err2str(rr), reframe->linesize[0], data_size);
+				memcpy(audio_buf, reframe->data[0], data_size);
+				av_frame_free(&reframe);
+				// memcpy(audio_buf, frame.data[0], data_size);
 			}
 			if(data_size <= 0) {
 				// nodata, get more frame
@@ -220,12 +226,12 @@ int main(int argc, char* argv[]) {
 	av_register_all();
 	ret = avformat_open_input(&fmt_ctx, vf_path, NULL, NULL);
 	if(ret < 0){
-		printf("Can not open %s\n", vf_path);
+		printf("Can not open %s: %s\n", vf_path, av_err2str(ret));
 		return -1;
 	}
 	ret = avformat_find_stream_info(fmt_ctx, NULL);
 	if( ret < 0) {
-		printf("Can not find stream info\n");
+		printf("Can not find stream info: %s\n", av_err2str(ret));
 		return -1;
 	}
 	av_dump_format(fmt_ctx, 0, vf_path, 0);
@@ -252,8 +258,8 @@ int main(int argc, char* argv[]) {
 	avcodec_parameters_to_context(vcodec_ctx, fmt_ctx->streams[v_stream_idx]->codecpar);
 	acodec_ctx = avcodec_alloc_context3(NULL);
 	avcodec_parameters_to_context(acodec_ctx, fmt_ctx->streams[a_stream_idx]->codecpar);
-	acodec_ctx->sample_fmt = AV_SAMPLE_FMT_S16P;
-	acodec_ctx->request_sample_fmt = AV_SAMPLE_FMT_S16P;
+	// acodec_ctx->sample_fmt = AV_SAMPLE_FMT_S16P;
+	// acodec_ctx->request_sample_fmt = AV_SAMPLE_FMT_S16P;
 	// acodec_ctx = fmt_ctx->streams[a_stream_idx]->codec;
 
 	vcodec = avcodec_find_decoder(vcodec_ctx->codec_id);
@@ -273,6 +279,17 @@ int main(int argc, char* argv[]) {
 	if(ret < 0){
 		printf("Can not open video decoder\n");
 	}
+
+	swr = swr_alloc_set_opts(NULL,  // we're allocating a new context
+                      acodec_ctx->channel_layout,  // out_ch_layout
+                      OUT_SAMPLE_FMT,    // out_sample_fmt
+                      OUT_SAMPLE_RATE,                // out_sample_rate
+                      acodec_ctx->channel_layout, // in_ch_layout: stereo, blabla
+                      acodec_ctx->sample_fmt,   // in_sample_fmt
+                      acodec_ctx->sample_rate,                // in_sample_rate
+                      0,                    // log_offset
+                      NULL);
+	swr_init(swr);
 
 	if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
 	    fprintf(stderr, "Could not initialize SDL - %s\n", SDL_GetError());
@@ -384,6 +401,7 @@ int main(int argc, char* argv[]) {
 	avcodec_free_context(&vcodec_ctx);
 	avcodec_close(acodec_ctx);
 	avcodec_free_context(&acodec_ctx);
+	swr_free(&swr);
 	end:
 	avformat_close_input(&fmt_ctx);
 	printf("Shutdown\n");
